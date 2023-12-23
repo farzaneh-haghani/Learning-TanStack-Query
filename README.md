@@ -13,11 +13,11 @@
 ## Get ALL
 
 1.  Move the fetch part in separate function
-2.  Import useQuery hook
+2.  Import `useQuery` hook because we get data.
 
-3.  Config useQuery by passing an object with some parameter such as:
+3.  Config `useQuery` by passing an object with some parameter such as:
 
-    - `queryKey` which is an array of one or more keys (string, object, nested array ...) to cache the data. So if we try to send same request with same key again, react query be able to reuse the existing data from cache.
+    - `queryKey` which is an array of one or more elements (string, object, nested array ...) to cache the data. So if we try to send same request with same key again, react query be able to reuse the existing data from cache. We use dynamic elements such as objects if the request always was not the same and be depend on any user input.
 
     - `queryFn` which should be the fetch function.
 
@@ -80,46 +80,89 @@
 
 7.  Now we need to access searchTerm correctly in the fetch function so we need to make sure that we pass searchTerm as an object in the queryFn. Because we used callback function so we need to get signal in the queryFn first and then pass it with searchTerm
 
-```jsx
-export async fetchQuestions({ signal,searchTerm })=>{
-  let url ="http://localhost:4000/questions"
-  if(searchTerm){
-    url +=`?search=${searchTerm}`
-  }
-  const res=await fetch(url,{ signal:signal })
-}
+    ```jsx
+    export async fetchQuestions({ signal,searchTerm })=>{
+      let url ="http://localhost:4000/questions"
+      if(searchTerm){
+        url +=`?search=${searchTerm}`
+      }
+      const res=await fetch(url,{ signal })
+    }
 
-// component
-useQuery({
-queryKey: ['questions',{ search: searchTerm }],
-queryFn:({ signal })=>fetchQuestions({ signal,searchTerm }),
-})
-```
+    // component
+    useQuery({
+    queryKey: ['questions',{ search: searchTerm }],
+    queryFn:({ signal })=>fetchQuestions({ signal,searchTerm }),
+    })
+    ```
 
-Now we have another problem when the user visiting the app for first time, we will see all data twice, because we fetch them one time to show all data and another time for searching component and because there is no searchTerm, it will fetch all data again.
+8.  Now we have another problem when the user visiting the app for first time, we will see all data twice, because we fetch them one time to show all data and another time for searching component and because there is no searchTerm, it will fetch all data again.
 
-- We need to make sure that we don't send the query and `disable` it if we did not enter any search at all. We can add `enable` property in configuration object. If it was `false`, the query will be disabled and by default is true. We could set `searchTerm !== ""`
+9.  We need to make sure that we don't send the query and `disable` it if we did not enter any search at all. We can add `enable` property in configuration object. If it was `false`, the query will be disabled and by default is true. We could set `searchTerm !== ""`
 
-```jsx
-useQuery({
-  queryKey: ["questions", { search: searchTerm }],
-  queryFn: ({ signal }) => fetchQuestions({ signal, searchTerm }),
-  enable: searchTerm !== "",
-});
-```
+    ```jsx
+    useQuery({
+      queryKey: ["questions", { search: searchTerm }],
+      queryFn: ({ signal }) => fetchQuestions({ signal, searchTerm }),
+      enable: searchTerm !== "",
+    });
+    ```
 
-Now we have another problem that we will see loading snipper for the first visiting. We don't want to see any data at the first. We want to see the relevant data after the user searched and then if the user delete the searchTerm, it shows all data.
-So we can't check it by empty string. We can set the initial value of useState for searchTerm be `undefined`
+10. Now we have another problem that we will see loading snipper for the first visiting. We don't want to see any data at the first. We want to see the relevant data after the user searched and then if the user delete the searchTerm, it shows all data.
+    So we can't check it by empty string. We can set the initial value of useState for searchTerm be `undefined`
 
-`const [searchTerm, setSearchTerm]=useState();`
+    ```jsx
+    const [searchTerm, setSearchTerm] = useState();
+    useQuery({
+      queryKey: ["questions", { search: searchTerm }],
+      queryFn: ({ signal }) => fetchQuestions({ signal, searchTerm }),
+      enable: searchTerm !== undefined,
+    });
+    ```
 
-```jsx
-useQuery({
-  queryKey: ["questions", { search: searchTerm }],
-  queryFn: ({ signal }) => fetchQuestions({ signal, searchTerm }),
-  enable: searchTerm !== undefined,
-});
-```
+11. Now we don't have any data for the first time but reactQuery treats it as pending, and we still see loading snipper.
+    Now we can pull out isLoading instead of isPending.
 
-Now we don't have any data for the first time but reactQuery treats it as pending, and we still see loading snipper.
-Now we can pull out isLoading instead of isPending.
+## POST
+
+1. import `useMutation` hook. We used `useQuery` to get data but for sending data or changing data we use `useMutation`.
+
+2. Same as useQuery it takes configuration object.
+
+   - We don't use `mutationKey` because they are for changing something in the backend, not for getting and storing data in our frontEnd. So we don't need to cache response data.
+
+   - We use `mutationFn` same as queryFn.
+
+3. `useMutation` return an object and we need to pull out some information same as useQuery such as mutate, isPending, isError...
+
+   - `mutate` is a function that we need to call it when we want to send the request. Also we will pass data for posting to this function.
+     `useMutation unlike useQuery does not send the request automatically.`
+
+4. we need `onSuccess` to make sure that mutation be finished before navigate to somewhere else. We should add a method on that.
+
+5. `invalidateQueries` We want to immediately update our data and see it after mutation. To achieve this we need to make sure that refetch is triggered, so we should call a method to invalidate one or more our queries. It will say that the data is outdated and it should be refetch.
+
+   - To tell which specific queries should be invalid, `invalidateQueries` takes an object with queryKey which we want to be target with same format we used before.
+   - if I use
+     `queryKey:['questions']`, it will invalid all queries so far even the query for search
+     ` queryKey: ["questions", { search: searchTerm }]`
+     because it includes questions as well.
+     If we don't want this, we can add exact property to true
+
+     ```jsx
+     queryClient.invalidateQueries({ queryKey: ["questions"], exact: true });
+     ```
+
+     In this situation we don't need to add exact because we wanted to invalid the queries for search as well, if the new post was added that is met the searchTerm that user entered. Now all queries that include this key will be invalidate.
+
+     ```jsx
+     useMutation({
+       mutationFn: createQuestion,
+       onSuccess: () => {
+         queryClient.invalidateQueries({ queryKey: ["questions"] });
+         navigate("/questions");
+       },
+     });
+
+     mutate({ questions });
+     ```
