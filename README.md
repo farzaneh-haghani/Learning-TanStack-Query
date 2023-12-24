@@ -159,10 +159,78 @@
      useMutation({
        mutationFn: createQuestion,
        onSuccess: () => {
-         queryClient.invalidateQueries({ queryKey: ["questions"] });
+         queryClient.invalidateQueries({
+           queryKey: ["questions"],
+         });
          navigate("/questions");
        },
      });
 
      mutate({ questions });
      ```
+
+## Delete
+
+For delete section, everything is similar to post.
+
+```jsx
+useMutation({
+  mutationFn: deleteQuestion,
+  onSuccess: () => {
+    queryClient.invalidateQueries({
+      queryKey: ["questions"],
+    });
+    navigate("/questions");
+  },
+});
+
+mutate({ id: questionId });
+```
+
+But there is one problem which is again sent another fetch request to get it again Because after deleting, we invalidated all related queries, so react query immediately triggered a refetch them. To avoid this, we should add a second parameter to the configuration object for invalidate queries `refetchType : "none"` which makes sure when you are invalidate queries, these existing queries will not automatically re triggered again immediately(that is the default behavior), instead just invalidated and the next time when they are required, they will refetch again.
+
+```jsx
+useMutation({
+  mutationFn: deleteQuestion,
+  onSuccess: () => {
+    queryClient.invalidateQueries({
+      queryKey: ["questions"],
+      refetchType: "none",
+    });
+    navigate("/questions");
+  },
+});
+
+mutate({ id: questionId });
+```
+
+## Make confirmation before DELETE
+
+```jsx
+const [isDeleting, setIsDeleting] = useState(false);
+
+const handleStartDelete = () => {
+  setIsDeleting(true);
+};
+
+const handleStopDelete = () => {
+  setIsDeleting(false);
+};
+<button onClick={handleStartDelete}>Delete</button>;
+
+// Modal Component
+{
+  isDeleting && (
+    <Modal onClose={handleStopDelete}>
+      <h2>Are you sure?</h2>
+      <p>
+        Do you really want to delete this question? This action can't be undone.
+      </p>
+      <div>
+        <button onClick={handleStopDelete}>Cancel</button>
+        <button onClick={handleDelete}>Delete</button>
+      </div>
+    </Modal>
+  );
+}
+```
